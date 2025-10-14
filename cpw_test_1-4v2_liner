@@ -1,0 +1,67 @@
+import argparse
+import numpy as np
+
+# 線形フィッティングによる補正関数の係数
+# Delta_L_end(f) = m * f + b  (fはGHz単位)
+M_LINEAR_CORRECTION = 0.0947  # 傾き (mm/GHz)
+B_LINEAR_CORRECTION = 1.3907  # 切片 (mm)
+
+def calculate_cpw_length_quarter_wave(frequency_ghz, ref_index, mode_k):
+    """
+    一端を短絡したクォーター波長CPW共振器の理想的な理論長を計算します。
+    (この関数自体は端部効果による補正を含んでいません)
+
+    Args:
+        frequency_ghz (float): 共振周波数 (単位: GHz)。
+        ref_index (float): CPWの屈折率。
+        mode_k (int): 共振モードの次数 (奇数のみ: k=1, 3, 5...)。
+
+    Returns:
+        float: CPWの理想的な理論長 (単位: mm)。
+    """
+    # 光速 (単位: m/s)
+    c_light = 299792458
+    
+    # 周波数をHzに変換
+    frequency_hz = frequency_ghz * 1e9
+    
+    # 屈折率から実効誘電率を計算
+    effective_epsilon = ref_index**2
+    
+    # 理論長を計算 (単位: m)
+    # L = (k * c) / (4 * f * sqrt(effective_epsilon))
+    length_m = (mode_k * c_light) / (4 * frequency_hz * np.sqrt(effective_epsilon))
+    
+    # 結果をmmに変換して返す
+    return length_m * 1000
+
+if __name__ == "__main__":
+    # 引数パーサーの設定
+    parser = argparse.ArgumentParser(description="一端を短絡したクォーター波長CPW共振器の長さを計算し、線形フィッティングに基づく周波数依存の端部効果補正を適用します。")
+    parser.add_argument("frequency", type=float, help="目標とする共振周波数 (GHz)")
+    parser.add_argument("--ref_index", type=float, default=2.5, help="CPWの屈折率 (デフォルト: 2.5)")
+    parser.add_argument("--mode_k", type=int, default=1, help="共振モードの次数 (奇数のみ, デフォルト: 1)")
+    
+    # 引数のパース
+    args = parser.parse_args()
+    
+    # --- 計算の実行 ---
+    # 1. 理想的な理論長を計算 (L_theory)
+    theory_length_mm = calculate_cpw_length_quarter_wave(args.frequency, args.ref_index, args.mode_k)
+    
+    # 2. 周波数に応じた補正項を線形フィッティングで計算
+    # 補正項 (Delta L_end) = 傾き * 周波数 + 切片
+    correction_value_mm = M_LINEAR_CORRECTION * args.frequency + B_LINEAR_CORRECTION
+    
+    # 3. 補正を適用 (L_new = L_theory - Delta_L_end)
+    corrected_length_mm = theory_length_mm - correction_value_mm
+    
+    # --- 結果の表示 ---
+    print("--- CPWの長さ計算結果（線形補正あり）---")
+    print(f"周波数: {args.frequency} GHz")
+    print(f"屈折率: {args.ref_index}")
+    print(f"モード次数: {args.mode_k}")
+    print("------------------------------------------")
+    print(f"理論長 (補正なし): {theory_length_mm:.3f} mm")
+    print(f"線形補正値 (Delta L_end): -{correction_value_mm:.3f} mm (f={args.frequency} GHzに基づく)")
+    print(f"必要なCPWの最終長さ: {corrected_length_mm:.3f} mm")
